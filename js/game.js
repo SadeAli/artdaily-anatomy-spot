@@ -78,15 +78,26 @@
     return LOC_PTS * clamp01(1 - (dist - free) / (FALLOFF_HEADS * headPx));
   }
 
+  /* isFinite() coerces, so it says yes to the empty string — and then `+`
+     on a string CONCATENATES instead of adding: ("" ) + (null) is the text
+     "null", which Math.min turns straight into NaN. Convert first, then
+     check, so the two halves of an item can only ever be added as numbers. */
+  function num(v) {
+    var n = Number(v);
+    return (typeof n === 'number' && isFinite(n)) ? n : 0;
+  }
+
   function itemScore(figScore, locScore) {
-    var s = (isFinite(figScore) ? figScore : 0) + (isFinite(locScore) ? locScore : 0);
-    return Math.max(0, Math.min(100, s));
+    return Math.max(0, Math.min(100, num(figScore) + num(locScore)));
   }
 
   function roundScore(scores) {
     if (!scores || !scores.length) return 0;
     var sum = 0, i;
-    for (i = 0; i < scores.length; i++) sum += isFinite(scores[i]) ? scores[i] : 0;
+    /* Clamped as well as coerced: a finite number outside 0–100 prints on
+       the HUD as loudly as a NaN would. The identity on every value
+       itemScore has ever produced. */
+    for (i = 0; i < scores.length; i++) sum += Math.max(0, Math.min(100, num(scores[i])));
     return sum / scores.length;
   }
 
@@ -222,33 +233,51 @@
     return 'rgb(' + out.join(',') + ')';
   }
 
+  /* getComputedStyle() on the root forces a style resolve, and it ran at
+     the top of every repaint along with a hex parse and a mix for
+     accentText. The tokens only move when the sheet flips theme, so cache
+     them against data-theme; the cache invalidates itself the moment that
+     attribute changes, so onTheme still repaints in the new colours. */
+  var inkCache = null, inkKey = null;
   function inks() {
+    var key = document.documentElement.dataset.theme || '';
+    if (inkCache && inkKey === key) return inkCache;
     var cs = getComputedStyle(document.documentElement);
     var ink = cs.getPropertyValue('--ink').trim();
     var accent = cs.getPropertyValue('--game-accent').trim() || cs.getPropertyValue('--bubblegum').trim();
-    var dark = document.documentElement.dataset.theme === 'dark';
-    return {
+    inkKey = key;
+    inkCache = {
       ink: ink,
       muted: cs.getPropertyValue('--muted').trim(),
       card: cs.getPropertyValue('--card').trim(),
       accent: accent,
       /* pure accent passes AA on the dark sheet; on paper it needs ink */
-      accentText: dark ? accent : mixColors(accent, ink, 0.55),
+      accentText: key === 'dark' ? accent : mixColors(accent, ink, 0.55),
     };
+    return inkCache;
   }
 
   /* ---- crisp canvas at any devicePixelRatio; height tracks width.
-     Taller than most drills — the figures stand upright. ---- */
-  var W = 0, H = 0;
+     Taller than most drills — the figures stand upright.
+     Returns true only when the sheet really changed size: assigning
+     canvas.width reallocates and clears the backing store, and `resize`
+     fires on every address-bar nudge on a phone — where it also rebuilt
+     both mannequins from scratch for a frame identical to the one already
+     on screen. ---- */
+  var W = 0, H = 0, fitDpr = 0;
   function fitCanvas() {
     var rect = canvas.getBoundingClientRect();
-    W = Math.max(1, Math.round(rect.width));
-    H = Math.round(W * 0.72);
+    var w = Math.max(1, Math.round(rect.width));
     var dpr = window.devicePixelRatio || 1;
+    if (w === W && dpr === fitDpr) return false;
+    W = w;
+    H = Math.round(W * 0.72);
+    fitDpr = dpr;
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
     canvas.style.height = H + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return true;
   }
 
   /* ---- round state ---- */
@@ -737,7 +766,7 @@
 
   ArtDaily.onTheme(draw);
   window.addEventListener('resize', function () {
-    fitCanvas();
+    if (!fitCanvas()) return;   /* nothing moved — the sheet already reads right */
     layoutItem(); /* same item, rebuilt at the new scale */
     draw();
   });
