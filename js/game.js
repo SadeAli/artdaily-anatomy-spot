@@ -40,17 +40,36 @@
     return best;
   }
 
-  /* Naming the flawed figure is half the marks. */
-  function figurePickScore(pickedIdx, flawedIdx) {
-    return pickedIdx === flawedIdx ? 50 : 0;
+  /* Naming the flawed figure is half the marks — but a wrong first tap
+     used to end the item at a hard zero, with the locate half never
+     attempted. With two figures that is a coin flip: two unlucky guesses
+     in a five-item round capped the round at 60 through no skill
+     deficit, and half of all first-timers met "other figure!" as their
+     very first feedback. A miss is recoverable now: say "not that one",
+     let them take the other figure for reduced credit, and still run the
+     locate half for its full 50. */
+  /* The split is 35 / 65, not 50 / 50. With two figures the first tap is
+     a coin flip, and weighting a coin flip at half the item is what made
+     a lucky beginner and an unlucky competent player print the same
+     number. FINDING the part is the skill, so it carries most of the
+     marks — and naming the figure second time still pays something. */
+  var PICK_PTS = 35;
+  var SECOND_CHANCE_PTS = 10;
+  var LOC_PTS = 65;
+
+  function figurePickScore(pickedIdx, flawedIdx, usedSecondChance) {
+    if (pickedIdx !== flawedIdx) return 0;
+    return usedSecondChance ? SECOND_CHANCE_PTS : PICK_PTS;
   }
 
-  /* Full 50 anywhere on the part (its radius + 12px of slop),
-     then a linear fade to 0 at 1.2 head-units past that. */
+  /* Full marks anywhere on the part (its radius + 12px of slop), then a
+     linear fade to 0 at 1.2 head-units past that. Any non-finite input
+     scores the floor rather than leaking a NaN into the round. */
   function locationScore(dist, partRadius, headPx) {
+    if (!isFinite(dist) || !isFinite(partRadius) || !isFinite(headPx) || headPx <= 0) return 0;
     var free = partRadius + TAP_SLOP;
-    if (dist <= free) return 50;
-    return 50 * clamp01(1 - (dist - free) / (FALLOFF_HEADS * headPx));
+    if (dist <= free) return LOC_PTS;
+    return LOC_PTS * clamp01(1 - (dist - free) / (FALLOFF_HEADS * headPx));
   }
 
   function itemScore(figScore, locScore) {
@@ -65,11 +84,15 @@
     return sum / scores.length;
   }
 
-  /* The error shrinks as the round goes: ±30% → ±20% → ±13%. */
+  /* The error shrinks as the round goes: ±30% → ±25% → ±20%.
+     It used to bottom out at ±13%, which on a forearm at h=52px is 6-7px
+     of length difference across two arms — an expert discrimination
+     presented as item 5 of a beginner drill. 20% is still a real test
+     and it is one a beginner can actually see. */
   function errFactorForItem(idx) {
     if (idx < 2) return 0.30;
-    if (idx < 4) return 0.20;
-    return 0.13;
+    if (idx < 4) return 0.25;
+    return 0.20;
   }
 
   /* ============================================================
@@ -230,6 +253,7 @@
   var pickedIdx = -1;
   var reveal = null;       /* {pts, wrongPick, pickTap, locTap} taps normalized */
   var guardUntil = 0;      /* ignore taps briefly after a phase flip */
+  var secondChance = false; /* a wrong first figure pick costs marks, not the item */
 
   var PARTS = ['head', 'upperArm', 'forearm', 'torso', 'leg', 'shoulders'];
 
@@ -249,10 +273,18 @@
     var side = (part === 'upperArm' || part === 'forearm' || part === 'leg')
       ? (Math.random() < 0.5 ? 'L' : 'R') : null;
     var factor = 1 + (Math.random() < 0.5 ? -1 : 1) * errFactorForItem(idx);
+    /* ONE pose, shared. Posing the two figures independently meant the
+       player was not spotting one difference between matched figures —
+       they were comparing two differently-posed figures where only one
+       also had a proportion flaw. That confound grows exactly as the
+       flaw shrinks, which made the late items close to random. Shared
+       pose = the ONLY difference between them is the thing being asked
+       about, which is what "two figures, one flaw" promises. */
+    var pose = randPose();
     return {
       flawedIdx: Math.random() < 0.5 ? 0 : 1,
       part: part, side: side, factor: factor,
-      poses: [randPose(), randPose()]
+      poses: [pose, pose]
     };
   }
 
@@ -276,10 +308,13 @@
   function setupItem() {
     phase = 'pick';
     pickedIdx = -1;
+    secondChance = false;
     reveal = null;
     guardUntil = Date.now() + 250;
     layoutItem();
-    hint.textContent = itemLabel() + ' — one figure hides a proportion error. tap the flawed figure.';
+    hint.textContent = itemLabel() +
+      ' — the two figures stand in the same pose; on one of them a single body part is the wrong length.' +
+      ' tap that figure. (the ruler beside them counts head-heights: a standing figure is 7.5 heads tall.)';
     draw();
   }
 
@@ -491,12 +526,16 @@
       drawTapZone(figs[1], c);
       drawFigure(figs[0], c, false);
       drawFigure(figs[1], c, false);
+      drawRuler(c, W * 0.5, figs[0].topY, figs[0].h);
       return;
     }
     if (phase === 'locate') {
       drawTapZone(figs[pickedIdx], c);
       drawFigure(figs[1 - pickedIdx], c, true);
       drawFigure(figs[pickedIdx], c, false);
+      /* The drill's own studio tip says "check landmarks, not vibes" and
+         then withheld the only measuring tool until after the guess. */
+      drawRuler(c, W * 0.5, figs[pickedIdx].topY, figs[pickedIdx].h);
       return;
     }
     /* reveal: the pristine figure fades, the flawed one gets the
@@ -540,12 +579,14 @@
     return -1;
   }
 
+  /* wrongPick now means "they needed the second look", not "the item is
+     forfeit" — nothing forfeits an item any more. */
   function startReveal(pts, wrongPick, pickTap, locTap) {
     phase = 'reveal';
     guardUntil = Date.now() + 500;
     reveal = { wrongPick: wrongPick, pickTap: pickTap, locTap: locTap };
     var item = items[itemIdx];
-    var msg = (wrongPick ? 'other figure! ' : '')
+    var msg = (wrongPick ? 'you had it second time. ' : '')
       + verdictText(item.part, item.side, item.factor)
       + ' · +' + Math.round(pts);
     if (itemIdx === ITEMS_PER_ROUND - 1) {
@@ -558,9 +599,13 @@
     draw();
   }
 
+  var lastPenAt = 0;
   canvas.addEventListener('pointerdown', function (ev) {
     if (!playing || !figs) return;
     if (ev.isPrimary === false) return;
+    /* palm rejection: a pen always beats a palm that landed first */
+    if (ev.pointerType === 'pen') lastPenAt = Date.now();
+    else if (ev.pointerType === 'touch' && Date.now() - lastPenAt < 500) return;
     ev.preventDefault();
     if (Date.now() < guardUntil) return;
     var p = pointerPos(ev);
@@ -572,17 +617,27 @@
         hint.textContent = itemLabel() + ' — tap one of the two figures.';
         return;
       }
-      pickedIdx = idx;
-      if (idx !== item.flawedIdx) {
-        /* wrong figure: item over at 0 — but the reveal still teaches */
-        itemScores.push(itemScore(figurePickScore(idx, item.flawedIdx), 0));
-        startReveal(0, true, { u: p.x / W, v: p.y / H }, null);
-      } else {
-        phase = 'locate';
+      if (idx !== item.flawedIdx && !secondChance) {
+        /* A wrong first tap is a look-again, not a forfeit. */
+        secondChance = true;
         guardUntil = Date.now() + 350;
-        hint.textContent = itemLabel() + ' — locked. now tap the part that looks off.';
+        hint.textContent = itemLabel() + ' — not that one; that figure is correct.' +
+          ' look again and tap the other, then find the part. (naming it second time is worth ' +
+          SECOND_CHANCE_PTS + ' instead of ' + PICK_PTS +
+          ' — finding the part is still worth its full ' + LOC_PTS + '.)';
         draw();
+        return;
       }
+      pickedIdx = item.flawedIdx; /* after a second chance, only the flawed one is live */
+      if (idx !== item.flawedIdx) {
+        hint.textContent = itemLabel() + ' — the other one. tap the figure on the ' +
+          (item.flawedIdx === 0 ? 'left' : 'right') + '.';
+        return;
+      }
+      phase = 'locate';
+      guardUntil = Date.now() + 350;
+      hint.textContent = itemLabel() + ' — locked. now tap the body part that is the wrong length.';
+      draw();
       return;
     }
 
@@ -596,11 +651,11 @@
       var cp = partCapsule(flawed, item.part, item.side);
       var d = distToCapsule(p, cp.segments);
       var sc = itemScore(
-        figurePickScore(pickedIdx, item.flawedIdx),
+        figurePickScore(pickedIdx, item.flawedIdx, secondChance),
         locationScore(d, cp.r, flawed.h)
       );
       itemScores.push(sc);
-      startReveal(sc, false, null, { u: p.x / W, v: p.y / H });
+      startReveal(sc, secondChance, null, { u: p.x / W, v: p.y / H });
       return;
     }
 
