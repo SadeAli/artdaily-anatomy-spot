@@ -62,12 +62,18 @@
     return usedSecondChance ? SECOND_CHANCE_PTS : PICK_PTS;
   }
 
-  /* Full marks anywhere on the part (its radius + 12px of slop), then a
+  /* Full marks anywhere on the part (its radius + the tap slop), then a
      linear fade to 0 at 1.2 head-units past that. Any non-finite input
-     scores the floor rather than leaking a NaN into the round. */
-  function locationScore(dist, partRadius, headPx) {
+     scores the floor rather than leaking a NaN into the round.
+     `slopPx` is a HIT ZONE, so the caller passes it through
+     ArtDaily.startRadius: a fingertip covers the target it is aiming at
+     and a screenless tablet cannot see its own hand, while a trackpad
+     (start factor 1.0) is unchanged. Defaults to the bare TAP_SLOP so the
+     function stays callable with three arguments. */
+  function locationScore(dist, partRadius, headPx, slopPx) {
     if (!isFinite(dist) || !isFinite(partRadius) || !isFinite(headPx) || headPx <= 0) return 0;
-    var free = partRadius + TAP_SLOP;
+    var slop = (typeof slopPx === 'number' && isFinite(slopPx) && slopPx >= 0) ? slopPx : TAP_SLOP;
+    var free = partRadius + slop;
     if (dist <= free) return LOC_PTS;
     return LOC_PTS * clamp01(1 - (dist - free) / (FALLOFF_HEADS * headPx));
   }
@@ -312,8 +318,11 @@
     reveal = null;
     guardUntil = Date.now() + 250;
     layoutItem();
+    /* "the wrong length" is not true of two of the six flaws — a head is
+       the wrong SIZE and shoulders the wrong WIDTH — and a beginner told
+       to hunt for a length problem will not look at either. */
     hint.textContent = itemLabel() +
-      ' — the two figures stand in the same pose; on one of them a single body part is the wrong length.' +
+      ' — the two figures stand in the same pose; on one of them a single body part is the wrong size.' +
       ' tap that figure. (the ruler beside them counts head-heights: a standing figure is 7.5 heads tall.)';
     draw();
   }
@@ -636,7 +645,7 @@
       }
       phase = 'locate';
       guardUntil = Date.now() + 350;
-      hint.textContent = itemLabel() + ' — locked. now tap the body part that is the wrong length.';
+      hint.textContent = itemLabel() + ' — locked. now tap the body part that is the wrong size.';
       draw();
       return;
     }
@@ -652,7 +661,7 @@
       var d = distToCapsule(p, cp.segments);
       var sc = itemScore(
         figurePickScore(pickedIdx, item.flawedIdx, secondChance),
-        locationScore(d, cp.r, flawed.h)
+        locationScore(d, cp.r, flawed.h, ArtDaily.startRadius(TAP_SLOP))
       );
       itemScores.push(sc);
       startReveal(sc, secondChance, null, { u: p.x / W, v: p.y / H });
@@ -690,7 +699,34 @@
   }
 
   /* ---- chrome wiring ---- */
-  document.getElementById('btnRound').addEventListener('click', newRound);
+  /* An unfinished round is never reported, so a stray press here threw
+     away every item already spotted without a word — and this drill is
+     played entirely by tapping, so a mis-tap on the button below the
+     canvas is the likeliest slip there is. First press arms, second
+     confirms. After the fifth item finishRound has already reported and
+     cleared `playing`, so a finished round deals the next one straight
+     away. */
+  var btnRound = document.getElementById('btnRound');
+  var btnRoundHTML = btnRound.innerHTML;
+  var roundArmed = false, roundArmTimer = null;
+
+  function disarmRoundBtn() {
+    roundArmed = false;
+    clearTimeout(roundArmTimer);
+    btnRound.innerHTML = btnRoundHTML;
+  }
+
+  btnRound.addEventListener('click', function () {
+    if (playing && itemScores.length > 0 && itemScores.length < ITEMS_PER_ROUND && !roundArmed) {
+      roundArmed = true;
+      btnRound.textContent = 'discard round?';
+      clearTimeout(roundArmTimer);
+      roundArmTimer = setTimeout(disarmRoundBtn, 2600);
+      return;
+    }
+    disarmRoundBtn();
+    newRound();
+  });
 
   var btnHow = document.getElementById('btnHow');
   var howTo = document.getElementById('howTo');
