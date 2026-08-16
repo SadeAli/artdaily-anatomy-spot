@@ -292,6 +292,21 @@
 
   var PARTS = ['head', 'upperArm', 'forearm', 'torso', 'leg', 'shoulders'];
 
+  /* THE OPENER HAS TO BE THE EASY ONE. Item 1 drew its flawed part
+     uniformly from all six, and at the opening ±30% those six are not
+     remotely equal: a torso is 2.35 heads long, so ±30% shifts the hips
+     by ~0.7 of a head — unmissable — while a FOREARM is 0.95 heads, so
+     ±30% is ~0.29 of a head, judged across the ~0.4×W gap between the two
+     figures. That is the finest discrimination the drill contains, and it
+     was being dealt as the very first thing a beginner ever sees, one
+     time in three (forearm or upper arm). Both arms are also the only
+     flaws that ask a second question — which side. Item 1 now draws from
+     the four big central parts, whose canon landmark (7.5 heads, two-head
+     shoulders, hips at halfway, knees at 5.5) is legible on the ruler
+     that is already on screen. Items 2–5 keep the full pool, so the
+     round's range and its ramp are unchanged. */
+  var OPENER_PARTS = ['head', 'torso', 'leg', 'shoulders'];
+
   function rand(lo, hi) { return lo + Math.random() * (hi - lo); }
 
   function randPose() {
@@ -303,8 +318,11 @@
   }
 
   function makeItem(idx, prevPart) {
+    /* idx 0 has no prevPart (it is null), so the no-repeat loop always
+       terminates on the first draw whichever pool is in hand. */
+    var pool = (idx === 0) ? OPENER_PARTS : PARTS;
     var part = prevPart;
-    while (part === prevPart) part = PARTS[Math.floor(Math.random() * PARTS.length)];
+    while (part === prevPart) part = pool[Math.floor(Math.random() * pool.length)];
     var side = (part === 'upperArm' || part === 'forearm' || part === 'leg')
       ? (Math.random() < 0.5 ? 'L' : 'R') : null;
     var factor = 1 + (Math.random() < 0.5 ? -1 : 1) * errFactorForItem(idx);
@@ -693,6 +711,11 @@
         locationScore(d, cp.r, flawed.h, ArtDaily.startRadius(TAP_SLOP))
       );
       itemScores.push(sc);
+      /* Running mean, so the HUD is alive from item 1. The "score" field
+         read "–" for all five items and only filled in at the very end,
+         which is a dead panel for the whole round — the three sibling
+         drills that keep a running mean all fixed this. */
+      hudScore.textContent = String(Math.round(roundScore(itemScores)));
       startReveal(sc, secondChance, null, { u: p.x / W, v: p.y / H });
       return;
     }

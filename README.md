@@ -3,13 +3,21 @@
 Two mannequins built on the classic 7.5-head canon stand side by side;
 one hides a single proportion error — head, upper arm, forearm, torso,
 leg or shoulder width. Tap the flawed figure, then tap the part that is
-off. Five items per round, and the flaw ramps subtler: ±30% → ±20% → ±13%.
+off. Five items per round, and the flaw ramps subtler: ±30% → ±25% →
+±20%. Item 1 always picks one of the four big central parts (head,
+shoulders, torso, leg), so the opener is a flaw you can actually see:
+±30% of a 2.35-head torso is unmissable, while ±30% of a 0.95-head
+forearm is the finest discrimination the drill contains and has no
+business being the first thing anyone meets.
 
-Scoring is pure geometry: 50 for naming the right figure, up to 50 more
+Scoring is pure geometry: 35 for naming the right figure, up to 65 more
 for how close the second tap lands to the flawed part's capsule (full
-marks on the part + 12px, fading to zero 1.2 head-units away). The round
-score is the mean of the five items. After every item the true canon is
-ghost-overlaid with a head-unit ruler, so each miss still teaches.
+marks on the part plus a tap slop eased for the hardware in hand, fading
+to zero 1.2 head-units away). Finding the part carries most of the marks
+because that is the skill; with two figures, the first tap is close to a
+coin flip. The round score is the mean of the five items. After every
+item the true canon is ghost-overlaid with a head-unit ruler, so each
+miss still teaches.
 
 Part of [artdaily.sadeali.com](https://artdaily.sadeali.com/) —
 plain HTML/CSS/JS, no build step, no trackers.
@@ -26,6 +34,15 @@ Both figures share ONE pose, so the only difference between them is the
 proportion being asked about. The head-height ruler is on screen while
 you play, the landmark canon is printed under the picture instead of
 hidden behind a button, and the hardest items are ±20% rather than ±13%.
+
+## What changed in the first-30-seconds pass
+
+Item 1's flawed part was drawn uniformly from all six, so one opener in
+three was an arm — and a forearm at ±30% is ~0.29 of a head, judged
+across the gap between the two figures, which is the subtlest call in the
+set. The opener now draws only from the four big central parts, whose
+canon landmark is legible on the ruler that is already on screen. Items
+2–5 keep the full pool, so the round's range and ramp are unchanged.
 
 ## Input fairness
 
