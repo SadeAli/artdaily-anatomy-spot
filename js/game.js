@@ -642,9 +642,20 @@
     guardUntil = Date.now() + 500;
     reveal = { wrongPick: wrongPick, pickTap: pickTap, locTap: locTap };
     var item = items[itemIdx];
+    /* NAME THE DASHED SKELETON. The most useful thing on the reveal is the
+       canon ghost drawn over the flawed figure — literally "here is what
+       that part should have been", with the gap between the two lines
+       being the whole error — and neither the drill nor "how to play" ever
+       said what it was. On item 1 those dashes, the highlight and the
+       "+30%" tag all land on a sheet that has never carried a mark, so a
+       beginner reads a verdict plus decoration. Named once; after that it
+       speaks for itself. */
     var msg = (wrongPick ? 'you had it second time. ' : '')
       + verdictText(item.part, item.side, item.factor)
-      + ' · +' + Math.round(pts);
+      + ' · +' + Math.round(pts)
+      + (itemIdx === 0
+        ? '. the dashed skeleton over the figure is that same pose drawn to the canon, so the gap between them is the error'
+        : '');
     if (itemIdx === ITEMS_PER_ROUND - 1) {
       /* the 5th score is in — report NOW, so a "new round" press
          during this reveal can never drop a completed round */
